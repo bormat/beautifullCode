@@ -83,22 +83,7 @@ var addIndent = function(s){
 	})
 	return s1;
 }
-var beautifull = function(s){
-	tab = []; 
-	toXML(s);
-	ind = 0; 
-
-	tab.forEach(function(s,i){
-		s.text = decode(s.text)
-		if( s.balise == 'scom'){
-			s.text = '//' + s.text;
-		}else if( s.balise == 'mcom'){
-			s.text = '/*' + s.text + '*/';
-		}
-	})	
-	s = tab[0].text	= addIndent(tab[0].text)
-	arrCode = s.split(/\[ref=(\d+)\]/g);
-	arr = [];
+	var arr = [];
 	var cropCom = function(text,tagName){
 		lastLine = (arr.join('') + text).split('\n').last()
 		var lg = lastLine.length;
@@ -115,7 +100,8 @@ var beautifull = function(s){
 			arr.push(text);
 		}
 	}
-	var cropCode = function(text,tagName){
+	
+	/*var cropCode = function(text,tagName){
 		lastLine = (arr.join('') + text).split('\n').last()
 		var lg = lastLine.length;
 		if(lg - limit > 0){
@@ -130,14 +116,30 @@ var beautifull = function(s){
 		}else{
 			arr.push(text);
 		}
-	}
+	}*/
 	var crop = function(text,tagName){
 		if(tagName == 'scom' || tagName == 'mcom'){
 			cropCom(text,tagName)
 		}else{
-			cropCode(text);
+			cropCom(text);
 		}
 	}
+	var beautifull = function(s){
+	tab = []; 
+	toXML(s);
+	ind = 0; 
+
+	tab.forEach(function(s,i){
+		s.text = decode(s.text)
+		if( s.balise == 'scom'){
+			s.text = '//' + s.text;
+		}else if( s.balise == 'mcom'){
+			s.text = '/*' + s.text + '*/';
+		}
+	})	
+	s = tab[0].text	= addIndent(tab[0].text)
+	arrCode = s.split(/\[ref=(\d+)\]/g);
+
 	arrCode.forEach(function(text,i){
 		if(i%2){
 			crop(tab[text].text,tab[text].balise);
