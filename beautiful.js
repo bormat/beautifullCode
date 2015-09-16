@@ -4,7 +4,7 @@ Array.prototype.last = function() {
 
 var off = false;
 var on = true;
-var limit = 40;
+var limit = 80;
 
 $('textarea').width('500px')
 $('textarea').height('500px')
@@ -18,22 +18,25 @@ var addBalise = function(name, text,unshift){//regex
 	return '[ref='+ tab.length + ']';
 }
 
-var toProtect = 'backsSlashPlusSlash backSlash ref';
+var toProtect = 'ref';
 var toRegExp = function(s){
 	return new RegExp('((' + s.replace(/\s/g, ')|(' ) + '))','g');
 }
 var encode = function(s){
 	return s.replace(toRegExp(toProtect), '$1enc')
-		.replace(/\\\//g,'backsSlashPlusSlash')//backslash
-		.replace(/\\/g,'backslash')//backslash;
+		.replace(/\\./g, function(m){
+			return addBalise('backSlash',m);  
+		})
+		//.replace(/\\\//g,'backsSlashPlusSlash')//backslash
+		//.replace(/\\/g,'backslash')//backslash;
 }
 var decode = function(s){
 	var regex = toRegExp((encode(toProtect)));
 	s = s.replace(regex,function(m){
 		return m.slice(0,-3)//enleve $enc à la fin des mot toprotect 
 	})
-	.replace(/backsSlashPlusSlash/g, '\\/')//backsSlashPlusSlash
-	.replace(/backslash/g, '\\')//backslash;;
+	/*.replace(/backsSlashPlusSlash/g, '\\/')//backsSlashPlusSlash
+	.replace(/backslash/g, '\\')//backslash;;*/
 	return s;
 }
 
@@ -56,7 +59,11 @@ var decode = function(s){
 		.replace(/\/.*?\/\w*/g, function(m){
 			return addBalise('regex',m);//regex
 		})
-		.replace(/^[\n\s\t]+/gm,'')
+		.replace(/(["']).*?\1/g, function(m){
+			return addBalise('quote',m);//quote
+		})
+
+		.replace(/^[\n\s\t]+/gm,'')//pas d'espace en début de ligne
 		.replace(/[ ]+/gm,' ')//multiple space
 	addBalise('main',s1,'unshift')
 }
@@ -100,7 +107,7 @@ var addIndent = function(s){
 			arr.push(text);
 		}
 	}
-	
+
 	/*var cropCode = function(text,tagName){
 		lastLine = (arr.join('') + text).split('\n').last()
 		var lg = lastLine.length;
@@ -128,7 +135,6 @@ var addIndent = function(s){
 	tab = []; 
 	toXML(s);
 	ind = 0; 
-
 	tab.forEach(function(s,i){
 		s.text = decode(s.text)
 		if( s.balise == 'scom'){
@@ -136,10 +142,19 @@ var addIndent = function(s){
 		}else if( s.balise == 'mcom'){
 			s.text = '/*' + s.text + '*/';
 		}
-	})	
-	s = tab[0].text	= addIndent(tab[0].text)
-	arrCode = s.split(/\[ref=(\d+)\]/g);
+	})
 
+	tab[0].text = tab[0].text.replace(/\{/g,'{\n').replace(/\}/g,'\n}').replace(/^[\n\s\t]+/gm,'')//pas d'espace en début de ligne
+	s = tab[0].text	= addIndent(tab[0].text)
+	
+
+	arr = []
+	arrCode = s.split(/\[ref=(\d+)\]/g);
+	tab.forEach(function(b){
+		b.text = b.text.replace(/\[ref=(\d+)\]/g,function(m,$1){
+			return tab[$1].text;
+		})
+	})
 	arrCode.forEach(function(text,i){
 		if(i%2){
 			crop(tab[text].text,tab[text].balise);
