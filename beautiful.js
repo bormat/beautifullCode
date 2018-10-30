@@ -155,11 +155,74 @@ var count = function(tab){
 }
 var addIndent = function(s,ind=0){
     var s1 = ""
-    s.split('\n').forEach(function(str){
-        ind -= count(str.match(/\}/g))
-        s1 += getInd(ind) + str + '\n';
-        ind += count(str.match(/\{/g)) ;
+    var lines = s.split('\n')
+    var smaller_indent = 0
+    var main_block
+    var bloc = main_block = {
+      indent: 0,
+      start : 0,
+      end: lines.length - 1
+    }
+    var all_blocs = [bloc]
+    lines.forEach(function(str,i){
+        var less = count(str.match(/\}/g))
+        var plus = count(str.match(/\{/g)) ;
+        ind -= Math.max(less - plus,0)
+        smaller_indent = Math.min(ind,smaller_indent)
+        for(var j = bloc.indent + 1; j <= ind;++j){
+            var parent = bloc
+            bloc = {
+              indent: j,
+              start: i,
+              parent: bloc,
+            }
+            all_blocs.push(bloc)
+        }
+        for(var j = bloc.indent - 1; j >= ind;--j){
+            bloc.end = i - 1
+            if(!bloc.parent){
+              smaller_indent = bloc.indent - 1
+              bloc.parent = {
+                indent: smaller_indent,
+                start : 0,
+                end: lines.length - 1
+              }
+              all_blocs.unshift(bloc)
+            }
+            bloc = bloc.parent
+
+        }
+        ind += Math.max(plus - less,0)
     })
+
+    // if a square of code is indent more than with one indent comparing
+    // to previous indent AND next unindent then reduce indent
+    var reduce_indentation = function(block){
+      if(!block.parent)return;
+      if(block.parent.start == block.start && block.parent.end == block.end){
+        block.indent = block.parent.indent
+      }else{
+        block.indent = block.parent.indent + 1
+      }
+    }
+    all_blocs.forEach(function(block,i){
+      i && reduce_indentation(block)
+    })
+
+    var indent_by_line = []
+    //this code is not optimized for perfs
+    all_blocs.forEach(function(block,i){
+      if(i && block.indent != block.parent.indent){
+        for(var i = block.start;i <= block.end;++i){
+          indent_by_line[i] = block.indent
+        }
+      }
+    })
+    smaller_indent += 2
+    lines.forEach(function(str,i){
+        s1 += getInd((indent_by_line[i]||0) - smaller_indent) + str + '\n';
+    })
+
     return s1;
 }
 
