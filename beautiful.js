@@ -3,6 +3,9 @@ Array.prototype.last = function() {
 };
 var conf = {
 	break_line: false,//doit on sauter une ligne après un {
+  indent_line_previous_line: ',./*+=^|&',
+	indent_line_current_line: ',./*+=^|&',//doit on sauter une ligne après
+	indent_only_once: true,//if there is 2 "{" unclosed don't indent twice
 	limit: 80// doit on sauter une ligne après un certain nombre de caractères dans les commentaires
 }
 $('textarea').width('200px').height('200px')
@@ -28,20 +31,18 @@ class Tag{
     this.indent_str = ''
   }
   unindent(){
-    this.text = this.text.replace(/[ \t]/g,'')// remove existing indentation
+    this.text = this.text.replace(/^[ \t]*/g,'')// remove existing indentation
   }
 
-  decode(){
-    return this.text
+  decode(indent_str){
+      return this.text = decode(this.text,'',false)
   }
+
 }
   class Protected_tag extends Tag{
       decode(indent){
         throw 'this is not supposed to happen'
       }
-  }
-  class RegExp_tag extends Tag{
-
   }
 
 
@@ -52,42 +53,48 @@ class Tag{
       }
 
       decode(ind){
-          var is_multiple = this.is_multiple
-          var sep = '\n' + (ind || '');
-          var lines = this.text.split('\n').map(function(line,i){
-              if(i > 0){
-                line = unindent(line)
-              }
-              do{
-                  var lg = line.length
-                  line = line.replace(eval('/.{'+ conf.limit +'}/g'), function(m){//detection of long lines
-                      return m.replace(/(.*)(\w*)/,function(m,$1,$2){ // split long line in two before the last word
-                          var sep = is_multiple ? ($2 !== '*' ? '*' : '')  : '//'
-                          return $1 + sep + $2;
-                      })
-                  })
-              }while(line.length != lg)//continue until there is no more too long line, it can happen when the line is very long that we have to do it several time
-              if(i && is_multiple){
-                line = line.replace(/(^[\t\s]*)\*?/g,'$1*')// put a * at the start if not present and not the first line of commment
-              }
-              return line
-          })
-          return this.text = lines.join(sep)
+          // var is_multiple = this.is_multiple
+          // var sep = '\n' + (ind || '');
+          // var lines = this.text.split('\n').map(function(line,i){
+          //     if(i > 0){
+          //       line = unindent(line)
+          //     }
+          //     // do{
+          //     //     var lg = line.length
+          //     //     line = line.replace(eval('/.{'+ conf.limit +'}/g'), function(m){//detection of long lines
+          //     //         return m.replace(/([\S]*)(\s)*$/,function(m,$1,$2){ // split long line in two before the last word
+          //     //             var sep = '\n'+ (is_multiple ? ($2 !== '*' ? '*' : '')  : '//')
+          //     //             return sep + $1;
+          //     //         })
+          //     //     })
+          //     // }while(line.length != lg )//continue until there is no more too long line, it can happen when the line is very long that we have to do it several time
+          //     // if(i && is_multiple){
+          //     //   line = line.replace(/(^[\t\s]*)\*?/g,'$1*')// put a * at the start if not present and not the first line of commment
+          //     // }
+          //     return line
+          // })
+          return this.text //= lines.join(sep)
       }
   }
 
 class Main_tag extends Tag{
   decode(indent_str){
-      this.unindent()
-      var text = addIndent(this.text)
-      var texts = text.split('\n').map(function(line3){
-          var inds = line3.match(/^\t*/)//get the indentation of the line
-          var ind = (indent_str || '') + (inds && inds[0] || '')
-          return decode(line3,ind,false)
-      })
-      return this.text = decode(texts.join('\n'),'',true)
+    this.unindent()
+    var text = addIndent(this.text)
+    var lines = text.split('\n')
+    var texts = lines.map(function(line3){
+        var inds = line3.match(/^\t*/)//get the indentation of the line
+        var ind = (indent_str || '') + (inds && inds[0] || '')
+        return decode(line3,ind,false)
+    })
+    if(texts.last().length == 0){
+      --texts.length
+    }
+    return this.text = decode(texts.join('\n'),'',true)
   }
 }
+class Quote_tag extends Tag{}
+class RegExp_tag extends Tag{}
 
 //push the Tag in an Array, and return a reference to the position of the tag in the array
 //if unshift has value 'unshift' then push at the start of the array instead of the end
@@ -109,38 +116,42 @@ var rec = function(f,s1){
     return s1;
 }
 var toXML = function(s1){//comment/\\/g
-    // s1 = encode(s1)
+    //empty charactère at pos 0 of tab that represent end of line
+    //before a comment [ref=0]'
+    var end_of_line = addBalise('Protected_tag','',{
+      type:'end_of_line'
+    })
     //protect string that use [ref=a number]
     s1 = s1.replace(/\[ref=(\d+)\]/g,function(m){
         return addBalise('Protected_tag',m);
     })
-    .replace(/\\./g, function(m){
+    s1 = s1.replace(/\\./g, function(m){
         return addBalise('Protected_tag',m,{
           type:'backSlash'
         });
     })
-    .replace(/\/\/(.*)/g,function(m,$1){
-        return addBalise('Comment_tag',m,{
+    s1 = s1.replace(/\/\/(.*)/g,function(m,$1){
+        return end_of_line+addBalise('Comment_tag',m,{
           is_multiple: false
         });// single comment
     })
-    .replace(/\/\*([\s\S]*?)\*\//gm,function(m,$1){
-        return addBalise('Comment_tag',m,{
+    s1 = s1.replace(/\/\*([\s\S]*?)\*\//gm,function(m,$1){
+        return end_of_line + addBalise('Comment_tag',m,{
           is_multiple: true
         });/*multiple comment */
     })
-    .replace(/\/.*?\/\w*/g, function(m){
+    s1 = s1.replace(/\/.*?\/\w*/g, function(m){
         return addBalise('RegExp_tag',m,{
           type: 'regex'
         });//regex
     })
-    .replace(/(["']).*?\1/g, function(m){
-        return addBalise('Protected_tag',m,{
+    s1 = s1.replace(/(["']).*?\1/g, function(m){
+        return addBalise('Quote_tag',m,{
           type: 'quote'
         });//quote
     })
-    .replace(/^[\n\s\t]+/gm,'')//pas d'espace en début de ligne
-    .replace(/[ ]+/gm,' ')//multiple space
+    s1 = s1.replace(/^[\n\s\t]+/gm,'')//pas d'espace en début de ligne
+    s1 = s1.replace(/[ ]+/gm,' ')//multiple space
     addBalise('Main_tag',s1)
 }
 var getInd = function(nb){
@@ -200,7 +211,6 @@ var addIndent = function(s,ind=0){
         }
         for(var j = bloc.indent - 1; j >= ind;--j){
             bloc.end = i - 1
-            if(bloc.open_char)
             if(!bloc.parent){
               smaller_indent = bloc.indent - 1
               bloc.parent = {
@@ -226,9 +236,12 @@ var addIndent = function(s,ind=0){
         block.indent = block.parent.indent + 1
       }
     }
-    all_blocs.forEach(function(block,i){
-      i && reduce_indentation(block)
-    })
+
+    if(conf.indent_only_once){
+      all_blocs.forEach(function(block,i){
+        reduce_indentation(block)
+      })
+    }
 
     var indent_by_line = []
     //this code is not optimized for perfs
@@ -243,8 +256,13 @@ var addIndent = function(s,ind=0){
     indent_by_line.forEach(function(indent){
         smaller_indent = Math.min(indent,smaller_indent)
     })
+    var indent_cause_previous = false;
     lines.forEach(function(str,i){
-        s1 += getInd((indent_by_line[i]||0) - smaller_indent) + str + '\n';
+      var indent = eval('/^\s*['+ conf.indent_line_current_line +']/').test(str)
+        || indent_cause_previous
+      s1 += getInd((indent_by_line[i]||0) - smaller_indent + indent ) + str + '\n';
+      //[ref=0] is before a comment to represent the end of the line
+      indent_cause_previous = eval('/.*['+ conf.indent_line_previous_line +']((\\[ref=0\\].*)|\\s*)$/').test(str)
     })
 
     return s1;
